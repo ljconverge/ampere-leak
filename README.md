@@ -1,24 +1,38 @@
 # Ampere Leak
 
-An operations analytics project for VoltRelay Energy, a simulated battery-swapping network across six Indian cities. The analysis connects service reliability, rider retention, and unit economics to a capital allocation decision.
+**Where should a growing battery-swapping network invest when service reliability slips?**
 
-## Findings
+Ampere Leak analyzes 18 months of simulated VoltRelay Energy operations across six Indian cities. It connects station failures, battery availability, rider retention, and unit economics to a recommendation leadership can test.
 
-Across **3.81 million eligible attempts**, modeled contribution improved year over year, reaching **₹13.59 per completed swap** in 2025 H1. Reliability moved in the opposite direction versus the preceding half. The failure rate rose from **4.33% to 6.49%**, and a shortage of charged packs was the largest recorded failure category.
+[**Open the live scorecard**](https://ampere-leak-web.vercel.app/) · [**Read the executive report**](https://ampere-leak-web.vercel.app/analysis_report.html) · [**Open the analysis notebook**](ampere_leak_colab.ipynb)
 
-The recommendation is to test additional charged-pack availability at matched stations before committing capital. Evaluate recovered swaps, incremental contribution, and 30-day rider return against a predefined decision rule.
+## The findings
 
-## Explore the results
+| Evidence | What it means |
+| --- | --- |
+| **3.81 million eligible attempts** | The analysis reconciles eight source tables and uses eligible attempts as the denominator for service metrics. |
+| **4.33% → 6.49% failure rate** | Reliability worsened from 2024 H2 to 2025 H1. Unavailable charged packs were the largest recorded reason for failure. |
+| **₹13.59 modeled contribution per completed swap** | Unit economics improved year over year even as reliability declined versus the preceding half. |
 
-- [Interactive scorecard](web/index.html) with monthly performance, a contribution bridge, cohort views, and a battery-pilot payback calculator
-- [Executive report](web/analysis_report.html) covering the six core questions, evidence and recommendations
-- [Colab notebook](ampere_leak_colab.ipynb) and [methods guide](METHODS.md) for analytical definitions and reproducibility
+**Recommendation.** Test additional charged-pack inventory at comparable stations before expanding. Decide whether to scale based on recovered swaps, incremental contribution, and 30-day rider return.
 
-Open either HTML file in a browser to view it locally.
+## Explore the live demo
+
+### Battery pilot payback calculator
+
+Change the number of recovered swaps per month to see how the modeled payback changes. Use the calculator to identify the recovery threshold the pilot would need to validate.
+
+[![Scorecard calculator showing modeled monthly contribution, payback, and the recovery target](docs/screenshots/payback-calculator.jpg)](https://ampere-leak-web.vercel.app/)
+
+### Executive analysis report
+
+Compare the three half-year baselines before tracing the operational and financial drivers. The report addresses all six core questions and documents the assumptions behind its recommendations.
+
+[![Executive report chart showing failure rates of 7.47%, 4.33%, and 6.49% across three half years](docs/screenshots/service-failure-report.jpg)](https://ampere-leak-web.vercel.app/analysis_report.html)
 
 ## Reproduce the analysis
 
-Use Python 3.11 or 3.12. From the repository root in PowerShell, place the eight source tables in dataset/ or pass the original archive with -Dataset.
+Use Python 3.11 or 3.12. Put the eight source files in dataset/ or pass the original ZIP to -Dataset. The runner creates a fresh directory for the evidence, report, and scorecard, then verifies the aggregate results.
 
 ```powershell
 python -m venv .venv
@@ -26,12 +40,10 @@ python -m venv .venv
 powershell -NoProfile -ExecutionPolicy Bypass -File .\run.ps1 -Dataset .\dataset
 ```
 
-The runner generates the audit, evidence, report, and scorecard in a fresh run directory and verifies the aggregate results. For Colab, set the project and data paths in the notebook setup cell.
+For Colab, open the [notebook](ampere_leak_colab.ipynb), set your Drive paths, and run all cells. The [methods guide](METHODS.md) documents joins, denominators, and release checks.
 
-## Deploy the website
+## Data and deployment
 
-In Vercel, import this repository and set **Root Directory** to **web**. Select **Other** as the framework preset, leave **Build Command** empty, and use **.** if an output directory is requested. The homepage is index.html and the report is available at /analysis_report.html. Review the competition’s sharing terms before deploying the embedded aggregates publicly. Use the event’s submission channel when public sharing is restricted.
+The source is the synthetic dataset provided by Gradient Learnings for the Data Analytics Hackathon. The contribution calculation includes modeled battery wear, and the payback scenarios depend on stated assumptions. Findings about pricing, equipment, and retention describe observational relationships.
 
-## Data and interpretation
-
-The source is the synthetic Gradient Learnings Data Analytics Hackathon dataset. Raw data, local run outputs, and video files are kept outside version control. Contribution includes modeled battery wear, and pilot scenarios depend on documented assumptions. The pricing, equipment, and retention findings are observational.
+The static site lives in web/ and is deployed on Vercel. For another deployment, select web as the root directory and use the Other framework preset with an empty build command.
