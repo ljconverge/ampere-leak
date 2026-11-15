@@ -1,0 +1,14 @@
+{
+  "annual_capital_rate": 0.12,
+  "pilot_cities": ["Bengaluru", "Pune"],
+  "pilot_start": "2024-10-01",
+  "recovery_multipliers": {"downside": 0.5, "base": 1.0, "upside": 1.5},
+  "options": [
+    {"option": "Broad station expansion", "basis": "all_stockouts", "recovery_share": 0.20, "capex": 6000000, "monthly_opex": 500000},
+    {"option": "Targeted co-location", "basis": "top_stockouts", "recovery_share": 0.35, "capex": 2400000, "monthly_opex": 150000},
+    {"option": "Targeted battery float and quarantine", "basis": "top_stockouts", "recovery_share": 0.30, "capex": 650000, "monthly_opex": 20000},
+    {"option": "Fleet-wide battery purchase", "basis": "all_stockouts", "recovery_share": 0.25, "capex": 3000000, "monthly_opex": 90000},
+    {"option": "Network pricing rollout", "basis": "pricing", "increment_per_swap": 0, "capex": 300000, "monthly_opex": 25000},
+    {"option": "Fleet exclusive with incremental concession", "basis": "fleet", "incremental_revenue_share": -0.03, "capex": 0, "monthly_opex": 0}
+  ]
+}

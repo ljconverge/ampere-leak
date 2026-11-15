@@ -1,0 +1,15 @@
+/dataset/
+/.venv/
+/.idea/
+/run-*/
+/evidence/
+/deliverables/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.vercel/
+*.zip
+*.avi
+*.mp4
+*.wav
+*.mpeg

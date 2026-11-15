@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ampere Leak | VoltRelay Energy</title>
+<style>
+:root{color-scheme:light;font:16px system-ui,sans-serif;background:#f3f0e9;color:#212731}
+body{max-width:1200px;margin:0 auto;padding:clamp(18px,4vw,52px)}
+h1{font-size:clamp(37px,7vw,70px);line-height:1;margin:18px 0}
+p{color:#454850;line-height:1.55}.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,480px),1fr))}
+section{background:#fffdf7;border:1px solid #d9caba;border-radius:14px;padding:18px;overflow:auto}
+h2{font-size:1.07rem;margin-top:0}label{display:block;color:#363a40}select{padding:6px 10px;background:#f8f1e6;color:#212731;margin:0 0 14px}
+canvas{width:100%;height:245px;display:block}table{width:100%;border-collapse:collapse;font-size:.84rem}th,td{text-align:left;padding:.66rem .35rem;border-bottom:1px solid #e6dbcf}
+.caption{font-size:.83rem}a{color:#844722}
+</style>
+</head>
+<body>
+<header><img width="170" src="data:image/png;base64,{{LOGO}}" alt="Ampere Leak logo"><div>VoltRelay Energy · Jan 2024–Jun 2025</div><h1>Ampere Leak</h1><p id="headline"></p></header>
+<main class="grid">
+<section><h2>Battery pilot payback calculator</h2><p class="caption">Vary recovered swaps while holding the base-case investment, operating cost and modeled contribution per recovered swap fixed.</p><label for="recovery">Recovered swaps per month <output id="recovery-value"></output></label><input id="recovery" type="range" min="0" max="4500" step="25"><p id="payback" aria-live="polite"></p></section>
+<section><h2>Network performance</h2><label for="metric">Monthly metric</label><select id="metric">
+<option value="failure_rate">Failure rate (%)</option><option value="completed">Completed swaps (thousands)</option>
+<option value="revenue">Gross receipts (₹ million)</option><option value="contribution_per_swap">Modeled contribution (₹/swap)</option></select>
+<canvas id="monthly" role="img" aria-label="Monthly performance for the selected metric"></canvas></section>
+<section><h2>Contribution bridge · ₹ per swap</h2><p class="caption">2024 H1 to 2025 H1. Signed accounting components.</p><canvas id="bridge" role="img" aria-label="Margin bridge from 2024 H1 to 2025 H1"></canvas></section>
+<section><h2>Pricing pilot · peak attempt share (%)</h2><p class="caption">Bengaluru and Pune in copper. Four comparison cities in charcoal. Vertical line marks Oct 2024.</p><canvas id="pilot" role="img" aria-label="Monthly city peak attempt share and pilot start"></canvas></section>
+<section><h2>New riders · time to completed return</h2><p class="caption">Network return probability (%) from day 14, Kaplan–Meier estimate.</p><canvas id="retention" role="img" aria-label="Kaplan–Meier estimated probability of completed return"></canvas></section>
+<section><h2>New riders · 30-day cohort rates</h2><p class="caption">Completion during days 14–30 among eligible riders. Cells show percent and cohort size.</p><label for="cohort-city">City</label><select id="cohort-city"></select><div id="cohorts"></div></section>
+<section><h2>Station prioritization</h2><p class="caption">Horizontal axis is attempts in 2025 H1. Vertical axis is no-pack failures. Guides show the network medians.</p><canvas id="quadrant" role="img" aria-label="Station volume and no-pack failure quadrant"></canvas></section>
+<section><h2>Priority hubs</h2><p class="caption">Ranking uses no-pack failures in 2025 H1. Observed telemetry covers the full study period.</p><div id="stations"></div></section>
+<section><h2>Battery return SoH by measured returns</h2><label for="pack-type">Pack type</label><select id="pack-type"></select><p class="caption">Copper shows Cellora, charcoal shows Amptek, and burgundy shows Kyron. Bins with fewer than 100 measurements are omitted.</p><canvas id="curves" role="img" aria-label="Return state of health by cumulative measured returns"></canvas></section>
+<section><h2>Battery supplier comparison</h2><p class="caption">Snapshot SoH loss in percentage points. Compare within pack type.</p><div id="suppliers"></div></section>
+<section><h2>Capital allocation scenarios</h2><label for="scenario">Scenario</label><select id="scenario"><option>base</option><option>downside</option><option>upside</option></select><div id="roi"></div></section>
+</main>
+<p class="caption">Based on the source ZIP and documented financial assumptions. See the executive report and evidence CSV files for methods and denominators.</p>
+<script id="evidence" type="application/json"><!--EVIDENCE--></script>
+<script>
+"use strict";
+const D = JSON.parse(document.querySelector("#evidence").textContent);
+const el = id => document.getElementById(id);
+const mint="#a45a36", blue="#26364a", dim="#5f5852", red="#9c3841";
+const nf = new Intl.NumberFormat("en-IN",{maximumFractionDigits:2});
+el("headline").textContent = D.summary.headline;
+function tbl(id, header, rows){
+ const table=document.createElement("table"), head=table.createTHead().insertRow(), body=table.createTBody();
+ header.forEach(x=>{const h=document.createElement("th");h.textContent=x;head.append(h)});
+ rows.forEach(row=>{const tr=body.insertRow();row.forEach(x=>tr.insertCell().textContent=x)});
+ el(id).replaceChildren(table);
+}
+function draw(id, groups, labels, options={}){
+ const canvas=el(id), w=canvas.clientWidth,h=245, dpr=devicePixelRatio, ctx=canvas.getContext("2d");
+ canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);
+ const values=groups.flatMap(g=>g.values).filter(Number.isFinite);
+ const L=43,R=9,T=14,B=43, plotW=w-L-R,plotH=h-T-B;
+ const lo=Math.min(...values,options.zero?0:Infinity), hi=Math.max(...values, options.zero?0:-Infinity);
+ const span=hi-lo||1,pad=span*.1, min=lo-pad,max=hi+pad;
+ const y=v=>T+(max-v)*plotH/(max-min);
+ const x=i=>L+(options.bridge?(i+.5)/labels.length:i/Math.max(1,labels.length-1))*plotW;
+ ctx.font="10px system-ui";ctx.textAlign="right";
+ for(let j=0;j<5;j++){const v=min+j*(max-min)/4;ctx.fillStyle=dim;ctx.fillText(nf.format(v),L-6,y(v)+3);
+ ctx.strokeStyle="#d9cec2";ctx.beginPath();ctx.moveTo(L,y(v));ctx.lineTo(w-R,y(v));ctx.stroke()}
+ ctx.textAlign="center";
+ labels.forEach((label,i)=>{if(options.bridge||i%Math.ceil(labels.length/6)===0||i===labels.length-1){ctx.fillStyle=dim;ctx.fillText(label,x(i),h-B+15)}});
+ if(options.cutoff!==undefined){ctx.strokeStyle=dim;ctx.setLineDash([4,4]);ctx.beginPath();ctx.moveTo(x(options.cutoff),T);ctx.lineTo(x(options.cutoff),h-B);ctx.stroke();ctx.setLineDash([])}
+ if(options.bridge){const widths=plotW/labels.length*.67;
+ options.bridge.forEach(([start,end,color],i)=>{ctx.fillStyle=color;ctx.fillRect(x(i)-widths/2,Math.min(y(start),y(end)),widths,Math.max(1,Math.abs(y(start)-y(end))))});return}
+ groups.forEach(g=>{ctx.strokeStyle=g.color;ctx.globalAlpha=g.opacity??1;ctx.lineWidth=2;ctx.beginPath();let pen=false;
+ g.values.forEach((v,i)=>{if(!Number.isFinite(v)){pen=false;return}if(pen)ctx.lineTo(x(i),y(v));else ctx.moveTo(x(i),y(v));pen=true});ctx.stroke();ctx.globalAlpha=1});
+}
+function setOptions(select,items){
+ items.forEach(item=>{const option=document.createElement("option");option.value=item;option.textContent=item;select.append(option)});
+}
+function quadrant(){
+ const points=D.station_priority.map(r=>[+r.attempts_h1,+r.no_pack_failures_h1]);
+ const canvas=el("quadrant"),w=canvas.clientWidth,h=245,dpr=devicePixelRatio,ctx=canvas.getContext("2d");
+ canvas.width=w*dpr;canvas.height=h*dpr;ctx.scale(dpr,dpr);
+ const a=points.map(p=>p[0]).sort((x,y)=>x-y), b=points.map(p=>p[1]).sort((x,y)=>x-y);
+ const x=v=>40+v*(w-52)/Math.max(1,...a),y=v=>218-v*198/Math.max(1,...b);
+ const ax=x(a[Math.floor(a.length/2)]),by=y(b[Math.floor(b.length/2)]);
+ ctx.strokeStyle=dim;ctx.beginPath();ctx.moveTo(ax,18);ctx.lineTo(ax,218);ctx.moveTo(40,by);ctx.lineTo(w-9,by);ctx.stroke();
+ points.forEach(p=>{ctx.fillStyle=x(p[0])>ax&&y(p[1])<by?mint:blue;ctx.beginPath();ctx.arc(x(p[0]),y(p[1]),3,0,2*Math.PI);ctx.fill()});
+ ctx.fillStyle=dim;ctx.font="10px system-ui";ctx.fillText(nf.format(a.at(-1)),w-52,235);ctx.fillText(nf.format(b.at(-1)),2,20);
+}
+function curves(){
+ const selected=el("pack-type").value;
+ const rows=D.battery_cycle_curves.filter(r=>r.pack_type===selected&&+r.soh_measurements>=100);
+ const xs=[...new Set(rows.map(r=>+r.cumulative_measured_returns_bin))].sort((a,b)=>a-b);
+ draw("curves",["Cellora","Amptek","Kyron"].map((k,i)=>{
+ const m=new Map(rows.filter(r=>r.supplier===k).map(r=>[+r.cumulative_measured_returns_bin,+r.mean_return_soh]));
+ return {color:[mint,blue,red][i],values:xs.map(x=>m.get(x))};
+ }),xs);
+}
+function redraw(){
+ const key=el("metric").value,scale={failure_rate:100,completed:.001,revenue:.000001,contribution_per_swap:1}[key];
+ draw("monthly",[{color:mint,values:D.monthly.map(r=>+r[key]*scale)}],D.monthly.map(r=>r.month.slice(2)));
+ let balance=D.summary.old_yield;
+ const bars=[[0,balance,blue]].concat(D.margin_bridge.map(r=>{const start=balance;balance+=+r.delta_inr_per_swap;return [start,balance,balance>=start?mint:red]}),[[0,D.summary.new_yield,blue]]);
+ draw("bridge",[{values:bars.flatMap(b=>b.slice(0,2))}],["24 H1","List","Disc.","Other","Energy","Wear","Fixed","25 H1"],{bridge:bars,zero:true});
+ const months=D.monthly.map(r=>r.month),cities=[...new Set(D.pricing_parallel_trends.map(r=>r.city))];
+ draw("pilot",cities.map(city=>{const rows=D.pricing_parallel_trends.filter(r=>r.city===city),m=new Map(rows.map(r=>[r.month,+r.peak_share*100]));
+ const treated=rows[0].pilot==="True";return {color:treated?mint:blue,opacity:treated?1:.55,values:months.map(month=>m.get(month))};
+ }),months.map(r=>r.slice(2)),{cutoff:months.indexOf("2024-10")});
+ const survived=D.return_km.filter(r=>r.scope==="network");
+ draw("retention",[{color:mint,values:survived.map(r=>+r.return_probability*100)}],survived.map(r=>r.day),{zero:true});
+ quadrant();curves();
+}
+function updatePilot(){
+ const r=D.roi_scenarios.find(r=>r.case==="base"&&r.option.toLowerCase().includes("targeted battery"));
+ const volume=+el("recovery").value, unit=+r.gross_gain_month/+r.recovered_swaps_month;
+ const cost=+r.gross_gain_month-+r.net_gain_month, capex=+r.capex, net=volume*unit-cost;
+ const threshold=Math.ceil((cost+capex/24)/unit);
+ el("recovery-value").textContent=nf.format(volume);
+ el("payback").textContent="Monthly net ₹"+nf.format(net)+" · "+(net>0?nf.format(capex/net)+" months payback":"No finite payback")+" · "+nf.format(threshold)+" recoveries/mo for 24-month payback";
+}
+const floatCase=D.roi_scenarios.find(r=>r.case==="base"&&r.option.toLowerCase().includes("targeted battery"));
+el("recovery").value=Math.round(+floatCase.recovered_swaps_month/25)*25;
+el("recovery").addEventListener("input",updatePilot);updatePilot();
+function showROI(){tbl("roi",["Option","Monthly net (₹)","Payback"],D.roi_scenarios.filter(r=>r.case===el("scenario").value).map(r=>[r.option,nf.format(+r.net_gain_month),r.payback_months?nf.format(+r.payback_months)+" mo":"—"]))}
+setOptions(el("pack-type"),[...new Set(D.battery_cycle_curves.map(r=>r.pack_type))].sort());
+setOptions(el("cohort-city"),["Network",...new Set(D.retention_cohorts.map(r=>r.city).filter(v=>v&&v!=="Network"))]);
+function showCohorts(){
+ const cohorts=D.retention_cohorts.filter(r=>r.city===el("cohort-city").value);
+ tbl("cohorts",["Signup month","Eligible","Return rate"],cohorts.map(r=>[r.signup_month,nf.format(+r.eligible),r.retained_share?nf.format(100*+r.retained_share)+"%":"—"]));
+ el("cohorts").querySelectorAll("tbody tr").forEach((tr,i)=>{
+ const v=cohorts[i].retained_share;
+ if(v)tr.cells[2].style.backgroundColor="rgba(183,116,74,"+Math.max(.08,(+v-.55)*.75)+")";
+ });
+}
+el("cohort-city").addEventListener("change",showCohorts);showCohorts();
+el("pack-type").addEventListener("change",curves);
+tbl("stations",["Station","City","No-pack failures","2W stockout"],D.station_priority.slice(0,12).map(r=>[r.station_id,r.city,nf.format(+r.no_pack_failures_h1),r.observed_2w_stockout_rate_full_period?nf.format(100*+r.observed_2w_stockout_rate_full_period)+"%":"—"]));
+tbl("suppliers",["Supplier","Pack","Packs","SoH loss"],D.supplier_summary.map(r=>[r.supplier,r.pack_type,nf.format(+r.packs),nf.format(+r.mean_snapshot_soh_loss)]));
+el("metric").addEventListener("change",redraw);el("scenario").addEventListener("change",showROI);
+window.addEventListener("resize",redraw);redraw();showROI();
+</script>
+</body>
+</html>
+
